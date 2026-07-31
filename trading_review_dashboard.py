@@ -232,10 +232,10 @@ div[data-testid="stMetric"] {
 
 /* Tab等宽铺满 */
 .stTabs [data-baseweb="tab-list"] {
-   display: flex;
+   display: grid;
+   grid-template-columns: repeat(6, 1fr);
    width: 100%;
-   gap: 0.55rem;
-   background: transparent;
+   gap: 8px;
 }
 
 
@@ -2251,6 +2251,7 @@ with tab_intraday:
    fig_qty.update_layout(
        title=f"{selected_day} 各阶段交易电量",
        yaxis_title="MWh",
+       xaxis_title=None,
        height=500,
        hovermode="x unified",
    )
@@ -2313,6 +2314,7 @@ with tab_intraday:
        title=f"{selected_day} 各阶段交易价格",
        xaxis_title="",
        yaxis_title="元/MWh",
+       xaxis_title=None,
        height=430,
        hovermode="x unified",
    )
