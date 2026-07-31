@@ -1504,44 +1504,71 @@ with tab_intraday:
 
     st.plotly_chart(fig_qty, use_container_width=True)
 
-    # 价格图：日前/实时保持连续曲线；能量块仅显示真实成交点，避免无交易时段显示0价格
+    # 价格图：所有市场采用散点展示，避免连续线误导交易状态
+    # 颜色 = 市场阶段，点形 = 买入/卖出方向
     import plotly.graph_objects as go
 
     fig_price = go.Figure()
+
     for market in market_selection:
-        tmp = plot_df[plot_df["market_stage_cn"] == market].copy()
+        tmp = plot_df[
+            plot_df["market_stage_cn"] == market
+        ].copy()
+
         if tmp.empty:
             continue
-        if market == "能量块":
-            tmp = tmp[tmp["energy_mwh"].abs() > 0].copy()
-            fig_price.add_trace(go.Scatter(
+
+        # 无成交不显示
+        tmp = tmp[tmp["energy_mwh"].abs() > 0].copy()
+        if tmp.empty:
+            continue
+
+        tmp["direction"] = np.where(
+            tmp["energy_mwh"] >= 0,
+            "买入",
+            "卖出",
+        )
+
+        tmp["direction_symbol"] = np.where(
+            tmp["energy_mwh"] >= 0,
+            "triangle-up",
+            "triangle-down",
+        )
+
+        fig_price.add_trace(
+            go.Scatter(
                 x=tmp[x_col],
                 y=tmp[price_plot_col],
                 mode="markers",
                 name=market,
-            ))
-        else:
-            fig_price.add_trace(go.Scatter(
-                x=tmp[x_col],
-                y=tmp[price_plot_col],
-                mode="lines+markers",
-                name=market,
-            ))
-
-    fig_price.update_traces(
-        hovertemplate=(
-            "时段：%{x}<br>"
-            "市场阶段：%{fullData.name}<br>"
-            "价格：%{y:,.2f} 元/MWh"
-            "<extra></extra>"
+                marker=dict(
+                    symbol=tmp["direction_symbol"],
+                    size=10,
+                ),
+                customdata=np.stack(
+                    [
+                        tmp["market_stage_cn"],
+                        tmp["direction"],
+                        tmp["energy_mwh"].abs(),
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate=(
+                    "时间：%{x}<br>"
+                    "市场：%{customdata[0]}<br>"
+                    "方向：%{customdata[1]}<br>"
+                    "成交电量：%{customdata[2]:,.2f} MWh<br>"
+                    "成交价格：%{y:,.2f} 元/MWh"
+                    "<extra></extra>"
+                ),
+            )
         )
-    )
 
     fig_price.update_layout(
         title=f"{selected_day} 各阶段交易价格",
         yaxis_title="元/MWh",
         height=430,
-        hovermode="x unified",
+        hovermode="closest",
         xaxis_title=None,
     )
 
@@ -1595,12 +1622,19 @@ with tab_trend:
         )
 
     with col2:
-        fig_daily_price = px.line(
-            daily,
+        daily_price = daily.copy()
+
+        # 未更新市场/未成交阶段不显示，不用0代表缺失
+        daily_price.loc[
+            daily_price["avg_price"] == 0,
+            "avg_price",
+        ] = np.nan
+
+        fig_daily_price = px.scatter(
+            daily_price,
             x="display_date",
             y="avg_price",
             color="market_stage_cn",
-            markers=True,
             category_orders={"market_stage_cn": MARKET_ORDER},
         )
 
