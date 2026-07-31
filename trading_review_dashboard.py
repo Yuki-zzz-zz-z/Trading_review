@@ -1572,7 +1572,7 @@ with tab_intraday:
         yaxis_title="元/MWh",
         annotations=[
             dict(
-                text="方向根据成交电量正负判断，并在鼠标提示中显示",
+                text="▲ 买入，▼ 卖出；颜色表示市场阶段",
                 xref="paper",
                 yref="paper",
                 x=0,
