@@ -179,7 +179,7 @@ div[data-testid="stMetric"] {
 /* Tab等宽铺满 */
 .stTabs [data-baseweb="tab-list"] {
    display: grid;
-   grid-template-columns: repeat(7, minmax(0, 1fr));
+   grid-template-columns: repeat(6, minmax(0, 1fr));
    width: 100%;
    gap: 0.55rem;
    background: transparent;
@@ -561,18 +561,16 @@ def calculate_period_weighted_prices(
 
 
 
-
-
-
-
 # =========================================================
-# 到户电费模拟参数
+# 到户电费模拟参数与计算
 # =========================================================
-DEFAULT_PEAK_UP_RATIO = 0.80
-DEFAULT_VALLEY_DOWN_RATIO = 0.65
-DEFAULT_LINE_LOSS_RATE = 0.0318
-DEFAULT_TRANSMISSION_PRICE = 0.0857
-DEFAULT_FUND_SURCHARGE = 0.0294
+DEFAULT_DELIVERY_PARAMS = {
+   "peak_up_ratio": 0.80,
+   "valley_down_ratio": 0.65,
+   "line_loss_rate": 0.0318,
+   "transmission_price": 0.0857,
+   "fund_surcharge": 0.0294,
+}
 
 
 DEFAULT_SYSTEM_FEE_DETAIL = {
@@ -591,44 +589,41 @@ DEFAULT_SYSTEM_FEE_DETAIL = {
 
 
 
-def calculate_delivered_price(
-   flat_price_yuan_mwh,
-   peak_up_ratio,
-   valley_down_ratio,
-   line_loss_rate,
-   transmission_price,
-   system_operation_fee,
-   fund_surcharge,
-):
-   """根据江苏用户侧规则计算峰平谷到户电价。"""
-   if pd.isna(flat_price_yuan_mwh):
+def calc_delivery_price(flat_price_mwh, params):
+   if pd.isna(flat_price_mwh):
        return None
 
 
-   market_price = flat_price_yuan_mwh / 1000
+   market_price = flat_price_mwh / 1000
 
 
-   line_loss_fee = (
-       market_price * line_loss_rate / (1 - line_loss_rate)
+   line_loss = (
+       market_price
+       * params["line_loss_rate"]
+       / (1 - params["line_loss_rate"])
    )
 
 
    adders = (
-       line_loss_fee
-       + transmission_price
-       + system_operation_fee
-       + fund_surcharge
+       line_loss
+       + params["transmission_price"]
+       + params["system_fee"]
+       + params["fund_surcharge"]
    )
 
 
    return {
-       "market_price": market_price,
-       "line_loss_fee": line_loss_fee,
-       "peak": market_price * (1 + peak_up_ratio) + adders,
+       "market": market_price,
+       "line_loss": line_loss,
+       "peak": market_price * (1 + params["peak_up_ratio"]) + adders,
        "flat": market_price + adders,
-       "valley": market_price * (1 - valley_down_ratio) + adders,
+       "valley": market_price * (1 - params["valley_down_ratio"]) + adders,
        "adders": adders,
    }
+
+
+
+
 
 
 
@@ -2485,6 +2480,159 @@ with tab_eb:
 
 
 # =========================================================
+# Tab 到户电费模拟
+# =========================================================
+with tab_cost:
+
+
+   st.markdown(
+       '<div class="section-title">到户电费模拟</div>',
+       unsafe_allow_html=True,
+   )
+
+
+   with st.expander("⚙️ 电费计算参数设置", expanded=False):
+
+
+       peak_up = st.number_input(
+           "峰上浮比例",
+           value=0.80,
+           step=0.01,
+       )
+
+
+       valley_down = st.number_input(
+           "谷下降比例",
+           value=0.65,
+           step=0.01,
+       )
+
+
+       line_loss = st.number_input(
+           "线损率",
+           value=0.0318,
+           step=0.001,
+           format="%.4f",
+       )
+
+
+       transmission = st.number_input(
+           "输配电价 元/kWh",
+           value=0.0857,
+           step=0.0001,
+           format="%.4f",
+       )
+
+
+       fund = st.number_input(
+           "基金附加 元/kWh",
+           value=0.0294,
+           step=0.0001,
+           format="%.4f",
+       )
+
+
+       system_detail = {}
+       st.markdown("系统运行费用")
+       for k, v in DEFAULT_SYSTEM_FEE_DETAIL.items():
+           system_detail[k] = st.number_input(
+               k,
+               value=v,
+               step=0.0001,
+               format="%.4f",
+           )
+
+
+   params = {
+       "peak_up_ratio": peak_up,
+       "valley_down_ratio": valley_down,
+       "line_loss_rate": line_loss,
+       "transmission_price": transmission,
+       "fund_surcharge": fund,
+       "system_fee": sum(system_detail.values()),
+   }
+
+
+   # 固定使用电能量价格，不含环境权益
+   ppg = calculate_period_weighted_prices(
+       filtered,
+       "energy_amount_yuan",
+   )
+
+
+   delivery = calc_delivery_price(
+       ppg.get("平", np.nan),
+       params,
+   )
+
+
+   if delivery:
+
+
+       fpg = filtered.copy()
+       fpg["period_type_tmp"] = fpg["datetime_bj"].apply(period_type)
+
+
+       volumes = (
+           fpg.groupby("period_type_tmp")["energy_mwh"]
+           .sum()
+           .to_dict()
+       )
+
+
+       peak_fee = abs(volumes.get("峰", 0) * delivery["peak"] * 1000)
+       flat_fee = abs(volumes.get("平", 0) * delivery["flat"] * 1000)
+       valley_fee = abs(volumes.get("谷", 0) * delivery["valley"] * 1000)
+
+
+       energy_fee = peak_fee + flat_fee + valley_fee
+
+
+       env_fee = 0
+       if "environmental_value_amount" in fpg.columns:
+           env_fee = fpg["environmental_value_amount"].sum()
+
+
+       final_cost = energy_fee + env_fee
+
+
+       c1, c2, c3, c4 = st.columns(4)
+
+
+       c1.metric("峰段电费", f"{peak_fee:,.2f} 元")
+       c2.metric("平段电费", f"{flat_fee:,.2f} 元")
+       c3.metric("谷段电费", f"{valley_fee:,.2f} 元")
+       c4.metric("最终预计成本", f"{final_cost:,.2f} 元")
+
+
+       st.markdown("#### 计算拆解")
+
+
+       st.dataframe(
+           pd.DataFrame([
+               ["平段市场交易基准价", ppg.get("平", np.nan), "元/MWh"],
+               ["峰到户电价", delivery["peak"], "元/kWh"],
+               ["平到户电价", delivery["flat"], "元/kWh"],
+               ["谷到户电价", delivery["valley"], "元/kWh"],
+               ["电能量费用", energy_fee, "元"],
+               ["环境权益费用", env_fee, "元"],
+               ["最终预计成本", final_cost, "元"],
+           ], columns=["项目", "数值", "单位"]),
+           use_container_width=True,
+           hide_index=True,
+       )
+
+
+       st.caption("暂未考虑深谷尖峰变化。")
+   else:
+       st.warning("缺少平段电能量成交价格，无法计算到户电费。")
+
+
+
+
+
+
+# =========================================================
 # Tab 5 中长期偏差预警
 # =========================================================
 with tab_risk:
@@ -2956,222 +3104,6 @@ with tab_risk:
 
 
 
-
-
-# =========================================================
-# Tab 6 到户电费模拟
-# =========================================================
-with tab_cost:
-   st.markdown(
-       '<div class="section-title">到户电费模拟</div>',
-       unsafe_allow_html=True,
-   )
-
-
-   st.caption(
-       "市场基准价固定采用平段电能量成交加权均价。"
-       "环境权益价值不参与峰平谷电价计算，单独计入成本。"
-   )
-
-
-   with st.expander("⚙️ 电费计算参数设置", expanded=False):
-       peak_up_ratio = st.number_input(
-           "峰上浮比例",
-           value=DEFAULT_PEAK_UP_RATIO,
-           step=0.01,
-           format="%.2f",
-       )
-       valley_down_ratio = st.number_input(
-           "谷下降比例",
-           value=DEFAULT_VALLEY_DOWN_RATIO,
-           step=0.01,
-           format="%.2f",
-       )
-       line_loss_rate = st.number_input(
-           "线损率",
-           value=DEFAULT_LINE_LOSS_RATE,
-           step=0.0001,
-           format="%.4f",
-       )
-       transmission_price = st.number_input(
-           "输配电价（元/kWh）",
-           value=DEFAULT_TRANSMISSION_PRICE,
-           step=0.0001,
-           format="%.4f",
-       )
-       fund_surcharge = st.number_input(
-           "基金附加（元/kWh）",
-           value=DEFAULT_FUND_SURCHARGE,
-           step=0.0001,
-           format="%.4f",
-       )
-
-
-       st.markdown("#### 系统运行费用")
-       system_fee_detail = {}
-       for k, v in DEFAULT_SYSTEM_FEE_DETAIL.items():
-           system_fee_detail[k] = st.number_input(
-               k,
-               value=v,
-               step=0.0001,
-               format="%.4f",
-           )
-
-
-       system_operation_fee = sum(system_fee_detail.values())
-
-
-   # 固定使用电能量价格，不读取综合价格
-   flat_energy_price = calculate_period_weighted_prices(
-       filtered,
-       "energy_amount_yuan",
-   ).get("平", np.nan)
-
-
-   delivered = calculate_delivered_price(
-       flat_energy_price,
-       peak_up_ratio,
-       valley_down_ratio,
-       line_loss_rate,
-       transmission_price,
-       system_operation_fee,
-       fund_surcharge,
-   )
-
-
-   if delivered is None:
-       st.warning("当前没有平段电能量成交价格，无法计算。")
-   else:
-       c1, c2, c3, c4 = st.columns(4)
-
-
-       c1.metric(
-           "平段市场交易基准价",
-           f"{flat_energy_price:,.2f} 元/MWh",
-       )
-       c2.metric(
-           "峰段到户电价",
-           f"{delivered['peak']:.4f} 元/kWh",
-       )
-       c3.metric(
-           "平段到户电价",
-           f"{delivered['flat']:.4f} 元/kWh",
-       )
-       c4.metric(
-           "谷段到户电价",
-           f"{delivered['valley']:.4f} 元/kWh",
-       )
-
-
-       st.markdown("#### 成本附加项")
-
-
-       st.dataframe(
-           pd.DataFrame(
-               {
-                   "项目": [
-                       "市场交易电能量价格",
-                       "线损费用",
-                       "输配电价",
-                       "系统运行费用",
-                       "基金附加",
-                   ],
-                   "元/kWh": [
-                       delivered["market_price"],
-                       delivered["line_loss_fee"],
-                       transmission_price,
-                       system_operation_fee,
-                       fund_surcharge,
-                   ],
-               }
-           ).round(6),
-           use_container_width=True,
-           hide_index=True,
-       )
-
-
-       # 根据实际峰平谷电量估算最终电费
-       tmp = filtered.copy()
-       tmp["period"] = tmp["datetime_bj"].apply(period_type)
-
-
-       energy_by_period = (
-           tmp.groupby("period")["energy_mwh"]
-           .sum()
-           .to_dict()
-       )
-
-
-       peak_kwh = energy_by_period.get("峰", 0) * 1000
-       flat_kwh = energy_by_period.get("平", 0) * 1000
-       valley_kwh = energy_by_period.get("谷", 0) * 1000
-
-
-       electricity_fee = (
-           peak_kwh * delivered["peak"]
-           + flat_kwh * delivered["flat"]
-           + valley_kwh * delivered["valley"]
-       )
-
-
-       env_fee = 0.0
-       if "environmental_value_amount" in filtered.columns:
-           env_fee = float(
-               pd.to_numeric(
-                   filtered["environmental_value_amount"],
-                   errors="coerce",
-               ).fillna(0).sum()
-           )
-
-
-       # 成本拆分
-       market_energy_cost = float(
-           filtered["energy_amount_yuan"].sum()
-       )
-
-
-       st.markdown("#### 最终电费结果")
-
-
-       e1, e2, e3, e4 = st.columns(4)
-
-
-       e1.metric(
-           "市场电能量成本",
-           f"{market_energy_cost:,.2f} 元",
-       )
-
-
-       e2.metric(
-           "电能量+政策费用",
-           f"{electricity_fee:,.2f} 元",
-       )
-
-
-       e3.metric(
-           "环境权益费用",
-           f"{env_fee:,.2f} 元",
-       )
-
-
-       e4.metric(
-           "预计最终成本",
-           f"{electricity_fee + env_fee:,.2f} 元",
-       )
-
-
-       st.caption(
-           "暂未考虑深谷尖峰变化。"
-       )
-
-
-       st.caption(
-           "注：暂未考虑深谷尖峰变化。"
-       )
-
-
-
-
 # =========================================================
 # Tab 6 明细与下载
 # =========================================================
@@ -3312,4 +3244,6 @@ with tab_data:
 # =========================================================
 # END
 # =========================================================
+
+
 
