@@ -2589,7 +2589,12 @@ with tab_cost:
 
 
        env_fee = 0
-       if "environmental_value_amount" in fpg.columns:
+       if "amount_yuan" in fpg.columns and "energy_amount_yuan" in fpg.columns:
+           env_fee = (
+               fpg["amount_yuan"].sum()
+               - fpg["energy_amount_yuan"].sum()
+           )
+       elif "environmental_value_amount" in fpg.columns:
            env_fee = fpg["environmental_value_amount"].sum()
 
 
@@ -2611,9 +2616,9 @@ with tab_cost:
        st.dataframe(
            pd.DataFrame([
                ["平段市场交易基准价", ppg.get("平", np.nan), "元/MWh"],
-               ["峰到户电价", delivery["peak"], "元/kWh"],
-               ["平到户电价", delivery["flat"], "元/kWh"],
-               ["谷到户电价", delivery["valley"], "元/kWh"],
+               ["峰到户电价", delivery["peak"] * 1000, "元/MWh"],
+               ["平到户电价", delivery["flat"] * 1000, "元/MWh"],
+               ["谷到户电价", delivery["valley"] * 1000, "元/MWh"],
                ["电能量费用", energy_fee, "元"],
                ["环境权益费用", env_fee, "元"],
                ["最终预计成本", final_cost, "元"],
@@ -2621,6 +2626,48 @@ with tab_cost:
            use_container_width=True,
            hide_index=True,
        )
+
+
+       with st.expander("查看电费计算算法"):
+           st.markdown(
+               f"""
+**1. 市场交易购电价格**
+
+
+平段电能量成交加权均价：
+{ppg.get("平", np.nan):.2f} 元/MWh
+
+
+**2. 到户电价计算**
+
+
+峰：
+市场价格 × (1 + 峰上浮比例) + 固定费用
+
+
+平：
+市场价格 + 固定费用
+
+
+谷：
+市场价格 × (1 - 谷下降比例) + 固定费用
+
+
+**3. 固定费用**
+
+
+线损 + 输配电价 + 系统运行费用 + 基金附加
+
+
+**4. 最终成本**
+
+
+峰段电量 × 峰价
++ 平段电量 × 平价
++ 谷段电量 × 谷价
++ 环境权益费用
+"""
+           )
 
 
        st.caption("暂未考虑深谷尖峰变化。")
@@ -3244,6 +3291,4 @@ with tab_data:
 # =========================================================
 # END
 # =========================================================
-
-
 
