@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-江苏电力交易量价复盘平台 V3.2.13
+江苏电力交易量价复盘平台 V3.2.16
 
 本版优化：
 1. 标题信息改为紧凑单行，避免异常空行
@@ -1704,6 +1704,36 @@ with tab_trend:
         + daily_structure["现货净调整量"]
     )
 
+    # 每日最终综合净价：
+    # 总交易金额 / 最终净交易电量
+    daily_amount_structure = (
+        daily.pivot_table(
+            index="display_date",
+            columns="market_stage_cn",
+            values="amount_selected",
+            aggfunc="sum",
+            fill_value=0,
+        )
+        .reset_index()
+    )
+
+    for market in MARKET_ORDER:
+        if market not in daily_amount_structure.columns:
+            daily_amount_structure[market] = 0
+
+    daily_structure["最终净金额"] = (
+        daily_amount_structure["年协/月协"]
+        + daily_amount_structure["能量块"]
+        + daily_amount_structure["日前"]
+        + daily_amount_structure["实时"]
+    )
+
+    daily_structure["最终净价"] = np.where(
+        daily_structure["最终净交易量"].abs() > 1e-9,
+        daily_structure["最终净金额"] / daily_structure["最终净交易量"],
+        np.nan,
+    )
+
     st.markdown("#### 每日交易结构变化")
 
     fig_structure = go.Figure()
@@ -1759,6 +1789,46 @@ with tab_trend:
 
     st.plotly_chart(
         fig_structure,
+        use_container_width=True,
+    )
+
+    st.markdown("#### 每日最终净价趋势")
+
+    fig_final_price = px.scatter(
+        daily_structure,
+        x="display_date",
+        y="最终净价",
+    )
+
+    fig_final_price.update_traces(
+        hovertemplate=(
+            "日期：%{x|%Y-%m-%d}<br>"
+            "最终净金额："
+            f"%{{customdata[0]:,.2f}} 元<br>"
+            "最终净量："
+            f"%{{customdata[1]:,.2f}} MWh<br>"
+            "最终净价："
+            f"%{{y:,.2f}} 元/MWh"
+            "<extra></extra>"
+        ),
+        customdata=np.column_stack(
+            [
+                daily_structure["最终净金额"],
+                daily_structure["最终净交易量"],
+            ]
+        ),
+    )
+
+    fig_final_price.update_xaxes(tickformat="%m-%d")
+    fig_final_price.update_layout(
+        title="每日最终综合成交净价",
+        xaxis_title="日期",
+        yaxis_title="元/MWh",
+        height=410,
+    )
+
+    st.plotly_chart(
+        fig_final_price,
         use_container_width=True,
     )
 
@@ -2561,5 +2631,4 @@ with tab_data:
 
 # =========================================================
 # END
-# =========================================================
 
