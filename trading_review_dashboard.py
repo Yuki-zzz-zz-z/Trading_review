@@ -1392,7 +1392,7 @@ with tab_overview:
     # 日前/实时市场交易效果解释
     if spot_signed_energy_amount < -1e-6:
         st.success(
-            f"🟢 日前/实时市场套利收益："
+            f"🟢 现货市场套利收益："
             f"{abs(spot_signed_energy_amount):,.2f} 元"
         )
     elif spot_signed_energy_amount > 1e-6:
