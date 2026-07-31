@@ -3124,17 +3124,49 @@ with tab_cost:
            )
 
 
-       e1, e2, e3 = st.columns(3)
-       e1.metric("电能量+政策费用", f"{electricity_fee:,.2f} 元")
-       e2.metric("环境权益费用", f"{env_fee:,.2f} 元")
+       # 成本拆分
+       market_energy_cost = float(
+           filtered["energy_amount_yuan"].sum()
+       )
+
+
+       st.markdown("#### 最终电费结果")
+
+
+       e1, e2, e3, e4 = st.columns(4)
+
+
+       e1.metric(
+           "市场电能量成本",
+           f"{market_energy_cost:,.2f} 元",
+       )
+
+
+       e2.metric(
+           "电能量+政策费用",
+           f"{electricity_fee:,.2f} 元",
+       )
+
+
        e3.metric(
+           "环境权益费用",
+           f"{env_fee:,.2f} 元",
+       )
+
+
+       e4.metric(
            "预计最终成本",
            f"{electricity_fee + env_fee:,.2f} 元",
        )
 
 
        st.caption(
-           "注：第一版暂不加入深谷电价。"
+           "暂未考虑深谷尖峰变化。"
+       )
+
+
+       st.caption(
+           "注：暂未考虑深谷尖峰变化。"
        )
 
 
