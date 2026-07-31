@@ -1529,8 +1529,14 @@ with tab_intraday:
             "卖出",
         )
 
-        # 价格图统一使用圆点，方向通过鼠标提示显示
-        # 避免不同市场方向点形不均导致误解
+        # 价格图使用点形区分交易方向：
+        # ▲ 买入，▼ 卖出；颜色仍表示市场阶段
+
+        tmp["marker_symbol"] = np.where(
+            tmp["direction"] == "买入",
+            "triangle-up",
+            "triangle-down",
+        )
 
         fig_price.add_trace(
             go.Scatter(
@@ -1540,6 +1546,7 @@ with tab_intraday:
                 name=market,
                 marker=dict(
                     size=10,
+                    symbol=tmp["marker_symbol"],
                 ),
                 customdata=np.stack(
                     [
@@ -1561,7 +1568,7 @@ with tab_intraday:
         )
 
     fig_price.update_layout(
-        title=f"{selected_day} 各阶段交易价格",
+        title=f"{selected_day} 各阶段交易价格（▲买入 ▼卖出）",
         yaxis_title="元/MWh",
         annotations=[
             dict(
@@ -1661,7 +1668,7 @@ with tab_trend:
             yaxis_title="元/MWh",
             height=500,
             hovermode="x unified",
-            legend_title_text="",
+            legend_title_text="市场阶段",
         )
 
         st.plotly_chart(
@@ -1956,7 +1963,7 @@ with tab_eb:
             height=390,
             hovermode="x unified",
             margin=dict(l=10, r=10, t=30, b=20),
-            legend_title_text="",
+            legend_title_text="市场阶段",
         )
 
         st.plotly_chart(
