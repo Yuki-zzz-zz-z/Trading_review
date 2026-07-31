@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-江苏电力交易量价复盘平台 V3.2.11
+江苏电力交易量价复盘平台 V3.2.13
 
 本版优化：
 1. 标题信息改为紧凑单行，避免异常空行
@@ -1529,11 +1529,8 @@ with tab_intraday:
             "卖出",
         )
 
-        tmp["direction_symbol"] = np.where(
-            tmp["energy_mwh"] >= 0,
-            "triangle-up",
-            "triangle-down",
-        )
+        # 价格图统一使用圆点，方向通过鼠标提示显示
+        # 避免不同市场方向点形不均导致误解
 
         fig_price.add_trace(
             go.Scatter(
@@ -1542,7 +1539,6 @@ with tab_intraday:
                 mode="markers",
                 name=market,
                 marker=dict(
-                    symbol=tmp["direction_symbol"],
                     size=10,
                 ),
                 customdata=np.stack(
@@ -1567,6 +1563,17 @@ with tab_intraday:
     fig_price.update_layout(
         title=f"{selected_day} 各阶段交易价格",
         yaxis_title="元/MWh",
+        annotations=[
+            dict(
+                text="方向根据成交电量正负判断，并在鼠标提示中显示",
+                xref="paper",
+                yref="paper",
+                x=0,
+                y=1.08,
+                showarrow=False,
+                font=dict(size=12),
+            )
+        ],
         height=430,
         hovermode="closest",
         xaxis_title=None,
@@ -1613,7 +1620,7 @@ with tab_trend:
             yaxis_title="MWh",
             height=500,
             hovermode="x unified",
-            legend_title_text="",
+            legend_title_text="市场阶段",
         )
 
         st.plotly_chart(
