@@ -55,12 +55,8 @@ st.set_page_config(
 # =========================================================
 # 2. 路径与常量
 # =========================================================
-BASE_DIR = Path(
-    r"."
-    r"\z - UPM Workspace Settings"
-    r"\Desktop\交易持仓量分析平台"
-)
-
+# Streamlit Cloud / GitHub 数据目录
+BASE_DIR = Path("data")
 
 OUTPUT_FILE_PATTERN = "trading_review_standardized_*.xlsx"
 
