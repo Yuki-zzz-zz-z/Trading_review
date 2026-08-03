@@ -1748,12 +1748,12 @@ with tab_overview:
    # 日前/实时市场交易效果解释
    if spot_signed_energy_amount < -1e-6:
        st.success(
-           f"🟢 日前/实时市场套利收益："
+           f"🟢 现货交易策略收益："
            f"{abs(spot_signed_energy_amount):,.2f} 元"
        )
    elif spot_signed_energy_amount > 1e-6:
        st.error(
-           f"🔴 日前/实时市场套利损失："
+           f"🔴 现货交易策略收益损失："
            f"{abs(spot_signed_energy_amount):,.2f} 元"
        )
    else:
