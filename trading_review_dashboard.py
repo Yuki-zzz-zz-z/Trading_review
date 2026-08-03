@@ -69,6 +69,7 @@ MARKET_CODE_TO_CN = {
    "energy_block": "能量块",
    "day_ahead": "日前",
    "real_time": "实时",
+   "deviation_recovery": "日前偏差费用",
 }
 
 
@@ -179,7 +180,7 @@ div[data-testid="stMetric"] {
 /* Tab等宽铺满 */
 .stTabs [data-baseweb="tab-list"] {
    display: grid;
-   grid-template-columns: repeat(6, minmax(0, 1fr));
+   grid-template-columns: repeat(7, minmax(0, 1fr));
    width: 100%;
    gap: 0.55rem;
    background: transparent;
@@ -335,6 +336,7 @@ def load_month_data(
        "energy_block",
        "day_ahead",
        "real_time",
+       "deviation_recovery",
        "summary_15min",
        "check",
    ]
@@ -1088,6 +1090,7 @@ with st.sidebar:
    long_term_raw = data["long_term"]
    summary_raw = data["summary_15min"]
    energy_block_raw = data["energy_block"]
+   deviation_raw = data.get("deviation_recovery", pd.DataFrame())
 
 
    summary_dates = derive_trade_fields(summary_raw)
@@ -1227,6 +1230,31 @@ if filtered.empty:
    st.stop()
 
 
+# 日前偏差费用：直接读取交易中心结算结果
+if not deviation_raw.empty:
+   deviation_raw = derive_trade_fields(deviation_raw)
+   deviation_filtered = deviation_raw[
+       deviation_raw["display_date"].between(start_ts, end_ts)
+   ].copy()
+else:
+   deviation_filtered = pd.DataFrame()
+
+if "deviation_recovery_yuan" in deviation_filtered.columns:
+   deviation_fee_total = float(
+       safe_numeric(deviation_filtered["deviation_recovery_yuan"])
+       .fillna(0).sum()
+   )
+else:
+   deviation_fee_total = 0.0
+
+
+deviation_energy_total = (
+    float(safe_numeric(deviation_filtered["energy_mwh"]).fillna(0).sum())
+    if not deviation_filtered.empty and "energy_mwh" in deviation_filtered.columns
+    else 0.0
+)
+
+
 # 先完成统一数值清洗。
 # 避免现货计算数据源与页面其他计算使用不同数据路径。
 for col in [
@@ -1266,6 +1294,9 @@ period_weighted_prices = calculate_period_weighted_prices(
 
 total_net_energy = float(filtered["energy_mwh"].sum())
 total_amount = float(filtered[amount_col].sum())
+
+# 实际结算成本 = 市场交易费用 + 日前偏差费用
+actual_settlement_cost = total_amount + deviation_fee_total
 
 
 overall_price = (
@@ -1411,24 +1442,42 @@ with k6:
 with k7:
    if spot_signed_energy_amount < -1e-6:
        render_kpi(
-           "日前/实时套利结果",
+           "现货交易策略收益",
            f"{abs(spot_signed_energy_amount):,.0f} 元",
-           "套利收益",
+           "策略优化收益",
        )
    elif spot_signed_energy_amount > 1e-6:
        render_kpi(
-           "日前/实时套利结果",
+           "现货交易策略收益",
            f"{abs(spot_signed_energy_amount):,.0f} 元",
-           "套利损失",
+           "策略增加成本",
        )
    else:
        render_kpi(
-           "日前/实时套利结果",
+           "现货交易策略收益",
            "0 元",
            "— 持平",
        )
 
 
+
+
+# 新增成本类KPI
+c1, c2 = st.columns(2, gap="medium")
+
+with c1:
+   render_kpi(
+       "日前偏差费用",
+       f"{deviation_fee_total:,.2f} 元",
+       "交易中心结算考核费用",
+   )
+
+with c2:
+   render_kpi(
+       "实际结算成本",
+       f"{actual_settlement_cost:,.2f} 元",
+       "交易费用 + 日前偏差费用",
+   )
 
 
 # =========================================================
@@ -1445,6 +1494,7 @@ with k7:
 ) = st.tabs(
    [
        "交易概览",
+       "日前偏差费用",
        "中长期偏差预警",
        "日内量价",
        "每日趋势",
@@ -2677,6 +2727,43 @@ with tab_cost:
 
 
 
+
+
+# =========================================================
+# Tab 2 日前偏差费用
+# =========================================================
+with tab_deviation:
+   st.markdown(
+       '<div class="section-title">日前偏差费用</div>',
+       unsafe_allow_html=True,
+   )
+
+   st.caption(
+       "来源于交易中心结算单“偏差收益回收”字段，直接读取电费结果，不重新计算偏差规则。"
+   )
+
+   d1, d2 = st.columns(2)
+   with d1:
+       render_kpi(
+           "日前偏差费用总额",
+           f"{deviation_fee_total:,.2f} 元",
+           "增加成本",
+       )
+   with d2:
+       render_kpi(
+           "对应偏差电量",
+           f"{deviation_energy_total:,.2f} MWh",
+           "",
+       )
+
+   if not deviation_filtered.empty:
+       st.dataframe(
+           deviation_filtered,
+           use_container_width=True,
+           hide_index=True,
+       )
+   else:
+       st.info("当前筛选范围无日前偏差费用数据。")
 
 
 # =========================================================
