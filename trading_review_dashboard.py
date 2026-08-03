@@ -1248,11 +1248,29 @@ else:
    deviation_fee_total = 0.0
 
 
-deviation_energy_total = (
-    float(safe_numeric(deviation_filtered["energy_mwh"]).fillna(0).sum())
-    if not deviation_filtered.empty and "energy_mwh" in deviation_filtered.columns
-    else 0.0
-)
+# 偏差电量读取新版清洗字段：
+# 优先读取 deviation_energy_mwh，
+# 兼容旧版本 energy_mwh。
+if (
+    not deviation_filtered.empty
+    and "deviation_energy_mwh" in deviation_filtered.columns
+):
+    deviation_energy_total = float(
+        safe_numeric(
+            deviation_filtered["deviation_energy_mwh"]
+        ).fillna(0).sum()
+    )
+elif (
+    not deviation_filtered.empty
+    and "energy_mwh" in deviation_filtered.columns
+):
+    deviation_energy_total = float(
+        safe_numeric(
+            deviation_filtered["energy_mwh"]
+        ).fillna(0).sum()
+    )
+else:
+    deviation_energy_total = 0.0
 
 
 # 先完成统一数值清洗。
@@ -1442,19 +1460,19 @@ with k6:
 with k7:
    if spot_signed_energy_amount < -1e-6:
        render_kpi(
-           "现货交易策略收益",
+           "日前/实时交易策略收益",
            f"{abs(spot_signed_energy_amount):,.0f} 元",
            "策略优化收益",
        )
    elif spot_signed_energy_amount > 1e-6:
        render_kpi(
-           "现货交易策略收益",
+           "日前/实时交易策略损失",
            f"{abs(spot_signed_energy_amount):,.0f} 元",
            "策略增加成本",
        )
    else:
        render_kpi(
-           "现货交易策略收益",
+           "日前/实时交易策略收益",
            "0 元",
            "— 持平",
        )
