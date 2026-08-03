@@ -104,7 +104,7 @@ st.set_page_config(
 # 2. 路径与常量
 # =========================================================
 BASE_DIR = Path(
-    r"C:\Users\k427683\OneDrive - UPM Kymmene Oyj\z - UPM Workspace Settings\Desktop\交易持仓量分析平台"
+    "data"
 )
 
 
