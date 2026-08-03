@@ -2672,7 +2672,7 @@ with tab_cost:
                ["谷到户电价", delivery["valley"] * 1000, "元/MWh"],
                ["电能量费用", energy_fee, "元"],
                ["环境权益费用", env_fee, "元"],
-               ["最终预计成本", final_cost, "元"],
+               ["最终预计成本(未包含偏差收费）", final_cost, "元"],
            ], columns=["项目", "数值", "单位"]),
            use_container_width=True,
            hide_index=True,
