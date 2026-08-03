@@ -1,3 +1,6 @@
+Try AI directly in your favorite apps … Use Gemini to generate drafts and refine content, plus get Gemini Pro with access to Google's next-gen AI for HK$158 HK$40 for 3 months
+1
+100%
 # -*- coding: utf-8 -*-
 """
 江苏电力交易量价复盘平台 V3.2.10
@@ -103,7 +106,9 @@ st.set_page_config(
 # =========================================================
 # 2. 路径与常量
 # =========================================================
-BASE_DIR = Path("data")
+BASE_DIR = Path(
+    r"C:\Users\k427683\OneDrive - UPM Kymmene Oyj\z - UPM Workspace Settings\Desktop\交易持仓量分析平台"
+)
 
 
 
@@ -338,9 +343,8 @@ div[data-testid="stMetric"] {
 .stTabs [data-baseweb="tab-list"] {
   display: flex;
   width: 100%;
-  gap: 0.9rem;
+  gap: 0.55rem;
   background: transparent;
-  justify-content: space-between;
 }
 
 
@@ -353,7 +357,6 @@ div[data-testid="stMetric"] {
 .stTabs [data-baseweb="tab"] {
   flex: 1 1 0;
   justify-content: center;
-  margin: 0;
   min-height: 2.8rem;
   padding: 0.65rem 0.7rem;
   background: #ffffff;
@@ -873,11 +876,7 @@ def deviation_recovery_summary(df: pd.DataFrame) -> tuple[float, float]:
       )
 
 
-  if "deviation_energy_mwh" in df.columns:
-      energy = float(
-          safe_numeric(df["deviation_energy_mwh"]).fillna(0).sum()
-      )
-  elif "energy_mwh" in df.columns:
+  if "energy_mwh" in df.columns:
       energy = float(
           safe_numeric(df["energy_mwh"]).fillna(0).sum()
       )
@@ -2623,19 +2622,19 @@ with k6:
 with k7:
   if spot_signed_energy_amount < -1e-6:
       render_kpi(
-          "日前/实时交易策略收益",
+          "现货交易策略收益",
           f"{abs(spot_signed_energy_amount):,.0f} 元",
           "策略优化收益",
       )
   elif spot_signed_energy_amount > 1e-6:
       render_kpi(
-          "日前/实时交易策略收益",
+          "现货交易策略收益",
           f"{abs(spot_signed_energy_amount):,.0f} 元",
           "策略增加成本",
       )
   else:
       render_kpi(
-          "日前/实时交易策略收益",
+          "日前/实时套利结果",
           "0 元",
           "— 持平",
       )
@@ -4203,7 +4202,7 @@ with tab_deviation:
 
 
   st.caption(
-      "来源于交易中心结算单“偏差收益回收”字段，读取偏差电量及费用结果，不重新计算偏差考核规则。"
+      "来源于交易中心结算单“偏差收益回收”字段，直接读取结算结果，不重新计算偏差考核规则。"
   )
 
 
@@ -5227,7 +5226,6 @@ with tab_data:
 # =========================================================
 # END
 # =========================================================
-
 
 
 
