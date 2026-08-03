@@ -1485,6 +1485,7 @@ with c2:
 # =========================================================
 (
    tab_overview,
+   tab_deviation,
    tab_risk,
    tab_intraday,
    tab_trend,
