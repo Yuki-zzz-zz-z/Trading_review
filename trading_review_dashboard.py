@@ -1,6 +1,3 @@
-Try AI directly in your favorite apps … Use Gemini to generate drafts and refine content, plus get Gemini Pro with access to Google's next-gen AI for HK$158 HK$40 for 3 months
-1
-100%
 # -*- coding: utf-8 -*-
 """
 江苏电力交易量价复盘平台 V3.2.10
@@ -5226,6 +5223,7 @@ with tab_data:
 # =========================================================
 # END
 # =========================================================
+
 
 
 
