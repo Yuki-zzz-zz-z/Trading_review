@@ -998,46 +998,71 @@ def calculate_spot_energy_weighted_price(
 
 
 def calculate_strategy_profit(df: pd.DataFrame) -> float:
-   """日前/实时交易策略收益：低买高卖收益或高买低卖损失。"""
+   """
+   日前/实时交易策略收益。
+
+   按当前所选时段整体复盘口径计算：
+   1. 分别计算日前、实时市场的净电量与带符号电能量金额；
+   2. 加权均价 = 带符号电能量金额 / 净电量；
+   3. 若实时净卖出：收益 = |实时净卖出量| × (实时加权均价 - 日前加权均价)；
+   4. 若实时净买入：收益 = 实时净买入量 × (日前加权均价 - 实时加权均价)。
+
+   正值表示策略收益，负值表示策略损失。
+   """
    spot = df.loc[
        df["market_stage"].isin(["day_ahead", "real_time"]),
-       ["display_date", "slot_index", "market_stage", "energy_mwh", "energy_price_yuan_mwh"],
+       ["market_stage", "energy_mwh", "energy_price_yuan_mwh"],
    ].copy()
 
    if spot.empty:
        return 0.0
 
    spot["energy_mwh"] = safe_numeric(spot["energy_mwh"]).fillna(0)
-   spot["energy_price_yuan_mwh"] = safe_numeric(spot["energy_price_yuan_mwh"])
-   spot = spot.dropna(subset=["energy_price_yuan_mwh"])
-
-   g = spot.groupby(
-       ["display_date", "slot_index", "market_stage"],
-       as_index=False
-   ).agg(
-       energy_mwh=("energy_mwh", "sum"),
-       price=("energy_price_yuan_mwh", "mean")
+   spot["energy_price_yuan_mwh"] = safe_numeric(
+       spot["energy_price_yuan_mwh"]
    )
+   spot = spot[spot["energy_price_yuan_mwh"].notna()].copy()
 
-   da = g[g.market_stage=="day_ahead"].rename(columns={"price":"da_price"})
-   rt = g[g.market_stage=="real_time"].rename(columns={"energy_mwh":"rt_energy", "price":"rt_price"})
-
-   m = rt[["display_date","slot_index","rt_energy","rt_price"]].merge(
-       da[["display_date","slot_index","da_price"]],
-       on=["display_date","slot_index"],
-       how="inner"
-   )
-
-   if m.empty:
+   if spot.empty:
        return 0.0
 
-   m["profit"] = np.where(
-       m["rt_energy"] < 0,
-       -m["rt_energy"] * (m["rt_price"] - m["da_price"]),
-       m["rt_energy"] * (m["da_price"] - m["rt_price"])
+   spot["signed_amount_yuan"] = (
+       spot["energy_mwh"] * spot["energy_price_yuan_mwh"]
    )
 
-   return float(m["profit"].sum())
+   stage = (
+       spot.groupby("market_stage", as_index=False)
+       .agg(
+           net_energy_mwh=("energy_mwh", "sum"),
+           signed_amount_yuan=("signed_amount_yuan", "sum"),
+       )
+   )
+
+   stage["weighted_price"] = np.where(
+       stage["net_energy_mwh"].abs() > 1e-9,
+       stage["signed_amount_yuan"] / stage["net_energy_mwh"],
+       np.nan,
+   )
+
+   da_row = stage[stage["market_stage"] == "day_ahead"]
+   rt_row = stage[stage["market_stage"] == "real_time"]
+
+   if da_row.empty or rt_row.empty:
+       return 0.0
+
+   da_price = float(da_row.iloc[0]["weighted_price"])
+   rt_price = float(rt_row.iloc[0]["weighted_price"])
+   rt_net = float(rt_row.iloc[0]["net_energy_mwh"])
+
+   if pd.isna(da_price) or pd.isna(rt_price) or abs(rt_net) <= 1e-9:
+       return 0.0
+
+   if rt_net < 0:
+       # 实时净卖出：实时价高于日前价为收益
+       return abs(rt_net) * (rt_price - da_price)
+
+   # 实时净买入：实时价低于日前价为收益
+   return rt_net * (da_price - rt_price)
 
 def calculate_recovery_fee(
    coverage_ratio: float,
@@ -1818,8 +1843,8 @@ with tab_overview:
        st.info("日前/实时交易策略基本持平。")
 
    st.caption(
-       "策略收益按照15分钟逐点比较日前与实时价格，"
-       "反映低买高卖或高买低卖带来的交易收益。"
+       "策略收益按所选时段的日前、实时加权均价计算，"
+       "反映低买高卖或高买低卖带来的交易收益或损失。"
    )
 
 
