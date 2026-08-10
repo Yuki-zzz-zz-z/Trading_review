@@ -996,6 +996,49 @@ def calculate_spot_energy_weighted_price(
 
 
 
+
+def calculate_strategy_profit(df: pd.DataFrame) -> float:
+   """日前/实时交易策略收益：低买高卖收益或高买低卖损失。"""
+   spot = df.loc[
+       df["market_stage"].isin(["day_ahead", "real_time"]),
+       ["display_date", "slot_index", "market_stage", "energy_mwh", "energy_price_yuan_mwh"],
+   ].copy()
+
+   if spot.empty:
+       return 0.0
+
+   spot["energy_mwh"] = safe_numeric(spot["energy_mwh"]).fillna(0)
+   spot["energy_price_yuan_mwh"] = safe_numeric(spot["energy_price_yuan_mwh"])
+   spot = spot.dropna(subset=["energy_price_yuan_mwh"])
+
+   g = spot.groupby(
+       ["display_date", "slot_index", "market_stage"],
+       as_index=False
+   ).agg(
+       energy_mwh=("energy_mwh", "sum"),
+       price=("energy_price_yuan_mwh", "mean")
+   )
+
+   da = g[g.market_stage=="day_ahead"].rename(columns={"price":"da_price"})
+   rt = g[g.market_stage=="real_time"].rename(columns={"energy_mwh":"rt_energy", "price":"rt_price"})
+
+   m = rt[["display_date","slot_index","rt_energy","rt_price"]].merge(
+       da[["display_date","slot_index","da_price"]],
+       on=["display_date","slot_index"],
+       how="inner"
+   )
+
+   if m.empty:
+       return 0.0
+
+   m["profit"] = np.where(
+       m["rt_energy"] < 0,
+       -m["rt_energy"] * (m["rt_price"] - m["da_price"]),
+       m["rt_energy"] * (m["da_price"] - m["rt_price"])
+   )
+
+   return float(m["profit"].sum())
+
 def calculate_recovery_fee(
    coverage_ratio: float,
    actual_energy: float,
@@ -1345,6 +1388,8 @@ spot_net = da_net + rt_net
    spot_energy_source
 )
 
+strategy_profit = calculate_strategy_profit(filtered)
+
 
 
 
@@ -1458,25 +1503,24 @@ with k6:
 
 
 with k7:
-   if spot_signed_energy_amount < -1e-6:
-       render_kpi(
-           "日前/实时交易策略收益",
-           f"{abs(spot_signed_energy_amount):,.0f} 元",
-           "策略优化收益",
-       )
-   elif spot_signed_energy_amount > 1e-6:
-       render_kpi(
-           "日前/实时交易策略损失",
-           f"{abs(spot_signed_energy_amount):,.0f} 元",
-           "策略增加成本",
-       )
-   else:
-       render_kpi(
-           "日前/实时交易策略收益",
-           "0 元",
-           "— 持平",
-       )
-
+    if strategy_profit > 1e-6:
+        render_kpi(
+            "日前/实时交易策略收益",
+            f"{strategy_profit:,.0f} 元",
+            "低买高卖 / 价格优化收益",
+        )
+    elif strategy_profit < -1e-6:
+        render_kpi(
+            "日前/实时交易策略损失",
+            f"{abs(strategy_profit):,.0f} 元",
+            "高买低卖 / 价格损失",
+        )
+    else:
+        render_kpi(
+            "日前/实时交易策略收益",
+            "0 元",
+            "— 持平",
+        )
 
 
 
@@ -1761,29 +1805,24 @@ with tab_overview:
        use_container_width=True,
        hide_index=True,
    )
-
-
    # 日前/实时市场交易效果解释
-   if spot_signed_energy_amount < -1e-6:
+   if strategy_profit > 1e-6:
        st.success(
-           f"🟢 日前/实时市场套利收益："
-           f"{abs(spot_signed_energy_amount):,.2f} 元"
+           f"🟢 日前/实时交易策略收益：{strategy_profit:,.2f} 元"
        )
-   elif spot_signed_energy_amount > 1e-6:
+   elif strategy_profit < -1e-6:
        st.error(
-           f"🔴 日前/实时市场套利损失："
-           f"{abs(spot_signed_energy_amount):,.2f} 元"
+           f"🔴 日前/实时交易策略损失：{abs(strategy_profit):,.2f} 元"
        )
    else:
-       st.info(
-           "日前/实时市场交易基本持平。"
-       )
-
+       st.info("日前/实时交易策略基本持平。")
 
    st.caption(
-       "净结算口径中，买入电量为正、卖出电量为负。"
-       "交易收益/损失根据日前与实时市场组合后的净结算金额判断。"
+       "策略收益按照15分钟逐点比较日前与实时价格，"
+       "反映低买高卖或高买低卖带来的交易收益。"
    )
+
+
 
 
    st.markdown("#### 阶段量价摘要")
@@ -3397,4 +3436,3 @@ with tab_data:
 # =========================================================
 # END
 # =========================================================
-
