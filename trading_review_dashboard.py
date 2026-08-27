@@ -525,7 +525,7 @@ DEFAULT_ANALYSIS_PARAMS = {
     "resale_normal_max": 0.10,
     "resale_general_max": 0.25,
     "resale_load_drop_max": 0.50,
-    "strategy_price_gap": 20.0,
+    "strategy_price_gap": 10.0,
     "strategy_volume_ratio": 0.05,
     "strategy_impact_yuan": 3000.0,
 }
