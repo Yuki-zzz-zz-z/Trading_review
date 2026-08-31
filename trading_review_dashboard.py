@@ -923,9 +923,9 @@ PM_LOAD_MW = {
 
 # 连续性策略复盘默认参数；均可在分析结论Tab中调整。
 DEFAULT_ANALYSIS_PARAMS.update({
-    "strategy_repeat_count": 3,
-    "strategy_repeat_ratio": 0.30,
-    "strategy_cumulative_impact_yuan": 20000.0,
+    "strategy_repeat_count": 2,
+    "strategy_repeat_ratio": 0.1,
+    "strategy_cumulative_impact_yuan": 1500.0,
 })
 
 
