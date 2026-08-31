@@ -525,10 +525,10 @@ DEFAULT_ANALYSIS_PARAMS = {
     "resale_normal_max": 0.10,
     "resale_general_max": 0.25,
     "resale_load_drop_max": 0.50,
-    # 用户当前采用10元/MWh作为策略关注的最小异常价差。
-    "strategy_price_gap": 10.0,
+    # 用户当前采用8元/MWh作为策略关注的最小异常价差。
+    "strategy_price_gap": 8.0,
     "strategy_volume_ratio": 0.05,
-    "strategy_impact_yuan": 3000.0,
+    "strategy_impact_yuan": 800.0,
 }
 
 
